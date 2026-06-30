@@ -16,7 +16,8 @@ WORKDIR /app
 ENV NODE_ENV=production
 
 COPY package*.json ./
-RUN npm ci --omit=dev && npm cache clean --force
+COPY --from=builder /app/node_modules ./node_modules
+RUN npm prune --omit=dev
 
 COPY --from=builder /app/dist ./dist
 COPY config ./config
