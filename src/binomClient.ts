@@ -1,5 +1,6 @@
 import axios, { AxiosInstance, AxiosError } from 'axios';
 import axiosRetry from 'axios-retry';
+import https from 'https';
 import type { Logger } from './logger.js';
 
 // Candidate field names for bot count — auto-detected from API response
@@ -29,6 +30,12 @@ export class BinomClient {
 
   constructor(baseUrl: string, apiKey: string, logger: Logger) {
     this.logger = logger;
+
+    const ignoreSSL = process.env.BINOM_IGNORE_SSL === 'true';
+    if (ignoreSSL) {
+      logger.warn('BINOM_IGNORE_SSL=true: skipping SSL certificate verification');
+    }
+
     this.http = axios.create({
       baseURL: baseUrl.replace(/\/$/, ''),
       timeout: 15_000,
@@ -37,6 +44,7 @@ export class BinomClient {
         'Content-Type': 'application/json',
         'Accept': 'application/json',
       },
+      httpsAgent: new https.Agent({ rejectUnauthorized: !ignoreSSL }),
     });
 
     axiosRetry(this.http, {
