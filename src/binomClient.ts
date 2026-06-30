@@ -37,7 +37,7 @@ export class BinomClient {
     }
 
     this.http = axios.create({
-      baseURL: baseUrl.replace(/\/$/, ''),
+      baseURL: `${baseUrl.replace(/\/$/, '')}/public`,
       timeout: 15_000,
       headers: {
         'Api-Key': apiKey,
