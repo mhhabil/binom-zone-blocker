@@ -1,0 +1,21 @@
+binom:
+  base_url: "https://yourdomain.com"
+  api_key: "${BINOM_API_KEY}"
+
+thresholds:
+  rule_1:
+    min_impressions: 500
+    min_bot_rate: 0.30
+  rule_2:
+    min_impressions: 50
+    min_bot_rate: 0.50
+
+lookback_hours: 24
+dry_run: true
+whitelist_zones: []
+
+notifications:
+  enabled: false
+  telegram:
+    bot_token: "${TELEGRAM_BOT_TOKEN}"
+    chat_id: "${TELEGRAM_CHAT_ID}"

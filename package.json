@@ -1,0 +1,35 @@
+{
+  "name": "binom-zone-blocker",
+  "version": "1.0.0",
+  "description": "Auto-block bot-heavy zones in Binom Tracker campaigns",
+  "main": "dist/main.js",
+  "scripts": {
+    "build": "tsc && cp -r src/web/public dist/web/public",
+    "dev:web": "tsx watch src/main.ts --web",
+    "dev:worker": "tsx src/main.ts --worker",
+    "start:web": "node dist/main.js --web",
+    "start:worker": "node dist/main.js --worker",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "dependencies": {
+    "axios": "^1.7.2",
+    "axios-retry": "^4.4.0",
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.5",
+    "express": "^4.19.2",
+    "ioredis": "^5.4.1",
+    "js-yaml": "^4.1.0",
+    "pino": "^9.3.2",
+    "pino-pretty": "^11.2.1"
+  },
+  "devDependencies": {
+    "@types/cors": "^2.8.17",
+    "@types/express": "^4.17.21",
+    "@types/js-yaml": "^4.0.9",
+    "@types/node": "^20.14.10",
+    "tsx": "^4.16.2",
+    "typescript": "^5.5.3",
+    "vitest": "^2.0.3"
+  }
+}
