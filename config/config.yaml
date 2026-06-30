@@ -1,5 +1,5 @@
 binom:
-  base_url: "https://yourdomain.com"
+  base_url: "https://mauritiusdodo.site"
   api_key: "${BINOM_API_KEY}"
 
 thresholds:
