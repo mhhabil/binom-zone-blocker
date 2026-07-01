@@ -1,6 +1,6 @@
 import Redis from 'ioredis';
 
-const CAMPAIGNS_KEY = 'binom:tracked_campaigns';
+const CAMPAIGN_MAP_KEY = 'binom:campaign_map';
 
 let client: Redis | null = null;
 
@@ -17,18 +17,30 @@ export function getRedisClient(): Redis {
   return client;
 }
 
-export async function getCampaigns(redis: Redis): Promise<string[]> {
-  const members = await redis.smembers(CAMPAIGNS_KEY);
-  return members.sort();
+export interface CampaignMapping {
+  binom_id: string;
+  admaven_id: string;
 }
 
-export async function addCampaign(redis: Redis, id: string): Promise<boolean> {
-  const added = await redis.sadd(CAMPAIGNS_KEY, id);
-  return added === 1;
+/** Returns all Binom→AdMaven campaign mappings, sorted by Binom id. */
+export async function getCampaignMap(redis: Redis): Promise<CampaignMapping[]> {
+  const map = await redis.hgetall(CAMPAIGN_MAP_KEY);
+  return Object.entries(map)
+    .map(([binom_id, admaven_id]) => ({ binom_id, admaven_id }))
+    .sort((a, b) => a.binom_id.localeCompare(b.binom_id, undefined, { numeric: true }));
 }
 
-export async function removeCampaign(redis: Redis, id: string): Promise<boolean> {
-  const removed = await redis.srem(CAMPAIGNS_KEY, id);
+/**
+ * Adds or updates a mapping. Returns true if a new field was created,
+ * false if an existing Binom id was overwritten.
+ */
+export async function setMapping(redis: Redis, binomId: string, admavenId: string): Promise<boolean> {
+  const created = await redis.hset(CAMPAIGN_MAP_KEY, binomId, admavenId);
+  return created === 1;
+}
+
+export async function removeMapping(redis: Redis, binomId: string): Promise<boolean> {
+  const removed = await redis.hdel(CAMPAIGN_MAP_KEY, binomId);
   return removed === 1;
 }
 

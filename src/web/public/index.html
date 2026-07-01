@@ -182,16 +182,23 @@
   <div class="container">
     <header>
       <h1>Binom Zone Blocker</h1>
-      <p>Manage tracked campaigns. The cron worker will auto-block bot-heavy zones.</p>
+      <p>Map Binom campaigns to AdMaven campaigns. The worker validates zones by bot rate and eliminates bad source ids in AdMaven.</p>
     </header>
 
     <div class="card">
-      <h2>Add Campaign</h2>
+      <h2>Add Mapping</h2>
       <form class="add-form" id="add-form">
         <input
           type="text"
-          id="campaign-input"
-          placeholder="Campaign ID (e.g. 101)"
+          id="binom-input"
+          placeholder="Binom campaign ID (e.g. 326)"
+          autocomplete="off"
+          required
+        />
+        <input
+          type="text"
+          id="admaven-input"
+          placeholder="AdMaven campaign ID"
           autocomplete="off"
           required
         />
@@ -200,7 +207,7 @@
     </div>
 
     <div class="card">
-      <h2>Tracked Campaigns <span id="count-badge">0</span></h2>
+      <h2>Campaign Mappings <span id="count-badge">0</span></h2>
       <div id="campaign-list">
         <div class="empty-state">Loading...</div>
       </div>
@@ -224,37 +231,39 @@
       badge.textContent = campaigns.length;
 
       if (campaigns.length === 0) {
-        list.innerHTML = '<div class="empty-state">No campaigns tracked yet.</div>';
+        list.innerHTML = '<div class="empty-state">No mappings yet.</div>';
         return;
       }
 
-      list.innerHTML = campaigns.map((id) => `
-        <div class="campaign-item" data-id="${id}">
+      list.innerHTML = campaigns.map((c) => `
+        <div class="campaign-item" data-id="${escapeHtml(c.binom_id)}">
           <span>
-            <span class="campaign-id">${escapeHtml(id)}</span>
-            <span class="badge">tracking</span>
+            <span class="campaign-id">${escapeHtml(c.binom_id)}</span>
+            <span class="badge">→ AdMaven ${escapeHtml(c.admaven_id)}</span>
           </span>
-          <button class="btn-danger" onclick="deleteCampaign('${escapeHtml(id)}')">Remove</button>
+          <button class="btn-danger" onclick="deleteCampaign('${escapeHtml(c.binom_id)}')">Remove</button>
         </div>
       `).join('');
     }
 
-    async function deleteCampaign(id) {
-      const res = await fetch(`${API}/campaigns/${encodeURIComponent(id)}`, { method: 'DELETE' });
+    async function deleteCampaign(binomId) {
+      const res = await fetch(`${API}/campaigns/${encodeURIComponent(binomId)}`, { method: 'DELETE' });
       if (res.ok) {
-        showToast(`Campaign ${id} removed`, 'success');
+        showToast(`Mapping for Binom ${binomId} removed`, 'success');
         await load();
       } else {
         const data = await res.json().catch(() => ({}));
-        showToast(data.error ?? 'Failed to remove campaign', 'error');
+        showToast(data.error ?? 'Failed to remove mapping', 'error');
       }
     }
 
     document.getElementById('add-form').addEventListener('submit', async (e) => {
       e.preventDefault();
-      const input = document.getElementById('campaign-input');
-      const id = input.value.trim();
-      if (!id) return;
+      const binomInput = document.getElementById('binom-input');
+      const admavenInput = document.getElementById('admaven-input');
+      const binomId = binomInput.value.trim();
+      const admavenId = admavenInput.value.trim();
+      if (!binomId || !admavenId) return;
 
       const btn = document.getElementById('add-btn');
       btn.disabled = true;
@@ -262,20 +271,20 @@
       const res = await fetch(`${API}/campaigns`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ id }),
+        body: JSON.stringify({ binom_id: binomId, admaven_id: admavenId }),
       });
 
       btn.disabled = false;
 
-      if (res.status === 201) {
-        showToast(`Campaign ${id} added`, 'success');
-        input.value = '';
+      if (res.ok) {
+        const data = await res.json().catch(() => ({}));
+        showToast(data.message ?? 'Mapping saved', 'success');
+        binomInput.value = '';
+        admavenInput.value = '';
         await load();
-      } else if (res.status === 409) {
-        showToast(`Campaign ${id} is already tracked`, 'error');
       } else {
         const data = await res.json().catch(() => ({}));
-        showToast(data.error ?? 'Failed to add campaign', 'error');
+        showToast(data.error ?? 'Failed to save mapping', 'error');
       }
     });
 

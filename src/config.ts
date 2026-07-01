@@ -15,6 +15,10 @@ export interface Config {
     base_url: string;
     api_key: string;
   };
+  admaven: {
+    base_url: string;
+    api_token: string;
+  };
   thresholds: {
     rule_1: ThresholdRule;
     rule_2: ThresholdRule;
@@ -54,6 +58,12 @@ export function loadConfig(configPath?: string): Config {
 
   if (!config.binom?.base_url) throw new Error('config: binom.base_url is required');
   if (!config.binom?.api_key) throw new Error('config: binom.api_key (BINOM_API_KEY env var) is required');
+  if (!config.admaven?.base_url) throw new Error('config: admaven.base_url is required');
+
+  // AdMaven token is only strictly required when we actually eliminate zones (non-dry-run).
+  if (!config.dry_run && !config.admaven?.api_token) {
+    throw new Error('config: admaven.api_token (ADMAVEN_API_TOKEN env var) is required when dry_run is false');
+  }
 
   return config;
 }

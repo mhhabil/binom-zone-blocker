@@ -2,6 +2,10 @@ binom:
   base_url: "https://mauritiusdodo.site"
   api_key: "${BINOM_API_KEY}"
 
+admaven:
+  base_url: "https://advertisers.ad-maven.com"
+  api_token: "${ADMAVEN_API_TOKEN}"
+
 thresholds:
   rule_1:
     min_impressions: 500

@@ -3,25 +3,10 @@ import axiosRetry from 'axios-retry';
 import https from 'https';
 import type { Logger } from './logger.js';
 
-// Candidate field names for bot count — auto-detected from API response
-const BOT_FIELD_CANDIDATES = ['bots', 'bot_clicks', 'lp_clicks_bot', 'bot', 'bot_count'] as const;
-
 export interface ZoneStat {
-  zone_id: string;
-  clicks: number;    // "impressions" = clicks in Binom
+  zone_id: string;   // Binom report `name` for token_1 (AdMaven placement, e.g. "1204959_-1")
+  clicks: number;
   bot_count: number;
-  _raw_bot_field?: string; // which field was used
-}
-
-export interface Campaign {
-  id: string | number;
-  filters?: {
-    zone?: {
-      type: string;
-      values: string[];
-    };
-  };
-  [key: string]: unknown;
 }
 
 export class BinomClient {
@@ -38,7 +23,7 @@ export class BinomClient {
 
     this.http = axios.create({
       baseURL: `${baseUrl.replace(/\/$/, '')}/public`,
-      timeout: 15_000,
+      timeout: 30_000,
       headers: {
         'Api-Key': apiKey,
         'Content-Type': 'application/json',
@@ -59,23 +44,29 @@ export class BinomClient {
     });
   }
 
+  /**
+   * Fetch per-source (zone) stats for a campaign, grouped by token_1 (the AdMaven
+   * placement id). `dateFrom`/`dateTo` must be "YYYY-MM-DD HH:mm:ss" strings.
+   */
   async getZoneStats(campaignId: string, dateFrom: string, dateTo: string): Promise<ZoneStat[]> {
     try {
-      const response = await this.http.get('/api/v1/report/custom', {
+      const response = await this.http.get('/api/v1/report/campaign', {
         params: {
-          campaign_id: campaignId,
-          group_by: 'zone',
-          date_from: dateFrom,
-          date_to: dateTo,
-          timezone: 0,
+          'ids[]': campaignId,
+          'groupings[]': 'token_1',
+          datePreset: 'custom_time',
+          dateFrom,
+          dateTo,
+          timezone: 'UTC',
+          sortColumn: 'clicks',
+          sortType: 'desc',
         },
       });
 
-      const rows: unknown[] = Array.isArray(response.data)
-        ? response.data
-        : (response.data?.data ?? response.data?.rows ?? []);
+      const rows: unknown[] = Array.isArray(response.data?.report)
+        ? response.data.report
+        : (response.data?.data ?? []);
 
-      // Log raw first row at debug so we can identify field names
       if (rows.length > 0) {
         this.logger.debug(
           { campaign_id: campaignId, sample_row: rows[0] },
@@ -90,62 +81,13 @@ export class BinomClient {
     }
   }
 
-  async getCampaign(campaignId: string): Promise<Campaign | null> {
-    try {
-      const response = await this.http.get(`/api/v1/campaign/${campaignId}`);
-      return response.data as Campaign;
-    } catch (err) {
-      this.handleApiError(err, `getCampaign(${campaignId})`);
-      return null;
-    }
-  }
-
-  async updateZoneBlacklist(campaignId: string, newZoneIds: string[]): Promise<void> {
-    const campaign = await this.getCampaign(campaignId);
-    if (!campaign) return;
-
-    const existing: string[] = campaign.filters?.zone?.values ?? [];
-    const merged = Array.from(new Set([...existing, ...newZoneIds]));
-
-    try {
-      await this.http.put(`/api/v1/campaign/${campaignId}`, {
-        ...campaign,
-        filters: {
-          ...(campaign.filters ?? {}),
-          zone: {
-            type: 'black',
-            values: merged,
-          },
-        },
-      });
-
-      this.logger.info(
-        { campaign_id: campaignId, total_blacklisted: merged.length, new_zones: newZoneIds },
-        'blacklist updated'
-      );
-    } catch (err) {
-      this.handleApiError(err, `updateZoneBlacklist(campaign=${campaignId})`);
-    }
-  }
-
   private parseZoneRow(row: unknown): ZoneStat {
     const r = row as Record<string, unknown>;
-
-    const zoneId = String(r['zone_id'] ?? r['zone'] ?? r['id'] ?? '');
-    const clicks = Number(r['clicks'] ?? r['impressions'] ?? 0);
-
-    // Auto-detect bot field
-    let botCount = 0;
-    let rawBotField: string | undefined;
-    for (const field of BOT_FIELD_CANDIDATES) {
-      if (field in r && r[field] !== undefined && r[field] !== null) {
-        botCount = Number(r[field]);
-        rawBotField = field;
-        break;
-      }
-    }
-
-    return { zone_id: zoneId, clicks, bot_count: botCount, _raw_bot_field: rawBotField };
+    return {
+      zone_id: String(r['name'] ?? ''),
+      clicks: Number(r['clicks'] ?? 0),
+      bot_count: Number(r['bots'] ?? 0),
+    };
   }
 
   private handleApiError(err: unknown, context: string): void {

@@ -7,48 +7,47 @@ vi.mock('axios');
 vi.mock('axios-retry', () => ({ default: vi.fn() }));
 
 const mockLogger = pino({ level: 'silent' });
-
 const mockedAxios = vi.mocked(axios, true);
 
 describe('BinomClient', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    const mockInstance = {
-      get: vi.fn(),
-      put: vi.fn(),
-      interceptors: { request: { use: vi.fn() }, response: { use: vi.fn() } },
-      defaults: { headers: {} },
-    };
-    mockedAxios.create = vi.fn().mockReturnValue(mockInstance);
   });
 
-  it('auto-detects "bots" bot field from response', async () => {
+  it('parses report rows into zone stats (name/clicks/bots)', async () => {
     const mockGet = vi.fn().mockResolvedValue({
-      data: [{ zone_id: '1', clicks: 500, bots: 200 }],
+      data: {
+        report: [
+          { name: '1204959_-1', clicks: '20256', bots: '516', unique_clicks: '1447' },
+          { name: '1151269_-1', clicks: '18393', bots: '0' },
+        ],
+        totals: { clicks: '38649', bots: '516' },
+      },
     });
     mockedAxios.create = vi.fn().mockReturnValue({ get: mockGet, defaults: { headers: {} } });
 
     const client = new BinomClient('https://example.com', 'key', mockLogger);
-    const stats = await client.getZoneStats('101', '2026-06-30 00:00', '2026-06-30 23:59');
+    const stats = await client.getZoneStats('326', '2026-06-30 00:00', '2026-06-30 23:59');
 
-    expect(stats[0].bot_count).toBe(200);
-    expect(stats[0]._raw_bot_field).toBe('bots');
+    expect(stats).toHaveLength(2);
+    expect(stats[0]).toEqual({ zone_id: '1204959_-1', clicks: 20256, bot_count: 516 });
+    expect(stats[1]).toEqual({ zone_id: '1151269_-1', clicks: 18393, bot_count: 0 });
   });
 
-  it('auto-detects "bot_clicks" bot field from response', async () => {
-    const mockGet = vi.fn().mockResolvedValue({
-      data: [{ zone_id: '2', clicks: 300, bot_clicks: 100 }],
-    });
+  it('requests report/campaign grouped by token_1', async () => {
+    const mockGet = vi.fn().mockResolvedValue({ data: { report: [] } });
     mockedAxios.create = vi.fn().mockReturnValue({ get: mockGet, defaults: { headers: {} } });
 
     const client = new BinomClient('https://example.com', 'key', mockLogger);
-    const stats = await client.getZoneStats('101', '2026-06-30 00:00', '2026-06-30 23:59');
+    await client.getZoneStats('326', '2026-06-30 00:00', '2026-06-30 23:59');
 
-    expect(stats[0].bot_count).toBe(100);
-    expect(stats[0]._raw_bot_field).toBe('bot_clicks');
+    const [url, opts] = mockGet.mock.calls[0];
+    expect(url).toBe('/api/v1/report/campaign');
+    expect(opts.params['ids[]']).toBe('326');
+    expect(opts.params['groupings[]']).toBe('token_1');
   });
 
-  it('returns empty array on 401 and does not throw', async () => {
+  it('returns empty array on error and does not throw', async () => {
     const error = Object.assign(new Error('Unauthorized'), {
       response: { status: 401 },
       isAxiosError: true,
@@ -57,30 +56,8 @@ describe('BinomClient', () => {
     mockedAxios.create = vi.fn().mockReturnValue({ get: mockGet, defaults: { headers: {} } });
 
     const client = new BinomClient('https://example.com', 'bad-key', mockLogger);
-    const stats = await client.getZoneStats('101', '', '');
+    const stats = await client.getZoneStats('326', '', '');
 
     expect(stats).toEqual([]);
-  });
-
-  it('merges existing blacklist with new zones on updateZoneBlacklist', async () => {
-    const existingCampaign = {
-      id: '101',
-      filters: { zone: { type: 'black', values: ['old-zone'] } },
-    };
-    const mockGet = vi.fn().mockResolvedValue({ data: existingCampaign });
-    const mockPut = vi.fn().mockResolvedValue({ data: {} });
-    mockedAxios.create = vi.fn().mockReturnValue({
-      get: mockGet,
-      put: mockPut,
-      defaults: { headers: {} },
-    });
-
-    const client = new BinomClient('https://example.com', 'key', mockLogger);
-    await client.updateZoneBlacklist('101', ['new-zone-1', 'new-zone-2']);
-
-    const putBody = mockPut.mock.calls[0][1];
-    expect(putBody.filters.zone.values).toContain('old-zone');
-    expect(putBody.filters.zone.values).toContain('new-zone-1');
-    expect(putBody.filters.zone.values).toContain('new-zone-2');
   });
 });
